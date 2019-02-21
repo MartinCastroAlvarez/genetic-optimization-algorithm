@@ -14,14 +14,19 @@ You can execute this script by running this:
 import sys
 
 import itertools
+import logging
 
 UNFIT = "_unfit"
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
 
 
 def get_fitness(sequence: str, dominance: list, new_genes: list) -> list:
     a = dominance[0] + new_genes[0]
     b = dominance[1] + new_genes[1]
-    if len(a) > 10 * len(sequence):  # Probably diverging.
+    if sequence and len(a) > 5 * len(sequence):  # Probably diverging.
         return UNFIT, ['', '']
     if a.startswith(b):
         return sequence + b, [a[len(b):], '']
@@ -53,8 +58,6 @@ if __name__ == "__main__":
         chromosomes = [
             get_fitness('', ['', ''], gene)
             for gene in genes
-            # if gene[0].startswith(gene[1])
-            # or gene[1].startswith(gene[0])
         ]
 
         # Catching survivors in the origins.
@@ -65,18 +68,19 @@ if __name__ == "__main__":
             and not chromosome[1][0]
             and not chromosome[1][1]
         ]
+        min_survivor = min(len(s) for s in survivors) if survivors else 10000
 
         # For each age, mutations will be performed
         # on the chromosomes and only the survivors will be kept.
         for age in range(ages):
+            logger.debug("Age=%s | Chromosomes=%s | Survivors=%s", age, len(chromosomes), len(survivors))
             chromosomes = (
                 get_fitness(mutation[0][0], mutation[0][1], mutation[1])
                 for mutation in (
                     (c, g)
                     for c in chromosomes
                     for g in genes
-                    if not survivors
-                    or len(c[0]) < len(sorted(survivors, key=len)[0])
+                    if len(c[0]) < min_survivor
                 )
             )
             chromosomes = [
@@ -84,6 +88,8 @@ if __name__ == "__main__":
                 for chromosome in chromosomes
                 if chromosome[0] != UNFIT
             ]
+            if not chromosomes:
+                break
             survivors.extend([
                 chromosome[0]
                 for chromosome in chromosomes
@@ -91,6 +97,7 @@ if __name__ == "__main__":
                 and not chromosome[1][0]
                 and not chromosome[1][1]
             ])
+            min_survivor = min(len(s) for s in survivors) if survivors else 10000
 
         # Detecting the final survivor.
         survivors = sorted(survivors, key=lambda s: (len(s), s))
