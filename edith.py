@@ -212,14 +212,17 @@ class Population(object):
         This function returns the survivor name.
 
         If multiple surivors exist, only the first will be returned.
-        The list of survivors will be arranged in alphabetical order
+        The list of survivors will be arranged by string length
+        and then in alphabetical order
 
         @param default: String value that will be
                         returned if there are no survivors.
         """
         if self.survivors.empty:
             return default
-        s = self.survivors.sort_values(self.genes.A, ascending=True)
+        self.survivors[self.TMP_INDEX] = self.survivors[self.genes.A].str.len()
+        s = self.survivors.sort_values([self.TMP_INDEX, self.genes.A],
+                                       ascending=[True, True])
         return s.iloc[0][self.genes.A]
 
     def fit(self):
@@ -434,7 +437,7 @@ class FunctionalTests(unittest.TestCase):
                                ["alan", "arala"], ["dear", "de"]]),
         (Sequence.IMPOSSIBLE, [["aa", "aaa"], ["xa", "as"]]),
         (Sequence.IMPOSSIBLE, [["i", "ii"], ["ii", "e"]]),
-        ("iiii", [["i", "iii"], ["iii", "i"]]),
+        ("zbc", [["i", "iii"], ["zb", "z"], ["iii", "i"], ["c", "bc"]]),
     ])
     def test_sequence(self, output, input_):
         """
