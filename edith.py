@@ -27,19 +27,17 @@ Case 4 IMPOSSIBLE
 
 You can also see all the flags looking at the script help:
 >>> python3 edith.py -h
-usage: edith.py [-h] [--debug] [--no-debug] [--input-file INPUT_FILE]
+usage: edith.py [-h] [--debug] [--no-debug]
                 [--ages AGES]
 optional arguments:
   -h, --help            show this help message and exit
   --debug               Use this flag to enable the debug/verbose mode.
                         (default: False)
   --no-debug
-  --input-file INPUT_FILE, -i INPUT_FILE
-                        Location of the input file. (default: sample-01.in)
   --ages AGES, -a AGES  Amount of iterations. (default: 10)
 
 You can run unit tests by executing the following command:
->>> python -m unittest edith.py
+>>> python -m unittest test_edith.py
 
 This code is compliant with PEP-8 standards:
 https://www.python.org/dev/peps/pep-0008/
@@ -48,10 +46,8 @@ You can check it by running the following instruction:
 """
 
 import os
+import sys
 import logging
-
-import unittest
-from parameterized import parameterized
 
 import numpy as np
 import pandas as pd
@@ -418,52 +414,13 @@ class Sequence(object):
         logger.debug("Finished analyzing sequence.")
 
 
-class FunctionalTests(unittest.TestCase):
-    """
-    Functional Tests.
-
-    Call this script with the following command:
-    >>> python -m unittest edith.py
-    """
-
-    @parameterized.expand([
-        (Sequence.IMPOSSIBLE, [["a", "ab"], ["b", "bb"], ["c", "cc"]]),
-        ("abcd", [["efgh", "efgh"], ["d", "cd"], ["abc", "ab"]]),
-        ("ienjoycorresponding", [['i', 'ie'], ['ing', 'ding'],
-                                 ['resp', 'orres'], ['ond', 'pon'],
-                                 ['oyc', 'y'], ['hello', 'hi'],
-                                 ['enj', 'njo'], ['or', 'c']]),
-        ("dearalanhowareyou", [["are", "yo"], ["you", "u"], ["how", "nhoware"],
-                               ["alan", "arala"], ["dear", "de"]]),
-        (Sequence.IMPOSSIBLE, [["aa", "aaa"], ["xa", "as"]]),
-        (Sequence.IMPOSSIBLE, [["i", "ii"], ["ii", "e"]]),
-        ("zbc", [["i", "iii"], ["zb", "z"], ["iii", "i"], ["c", "bc"]]),
-    ])
-    def test_sequence(self, output, input_):
-        """
-        Running functional tests for
-        multiple parameters/fixtures.
-        """
-        input_ = "\n".join([
-            " ".join(row)
-            for row in input_
-        ])
-        g = Genes(input_)
-        s = Sequence(genes=g)
-        s.run()
-        self.assertEquals(s.population.get_survivor(Sequence.IMPOSSIBLE),
-                          output)
-
-
 @begin.start
 def run(debug: "Use this flag to enable the debug/verbose mode."=False,
-        input_file: "Location of the input file."="sample-01.in",
         ages: "Amount of iterations."=10):
     """
     This function is required by "begin" to provide shell script access.
 
     @param debug: Use this flag to enable the debug/verbose mode.
-    @param input_file: Location of the input file.
     @param ages: Amount of iterations.
     """
 
@@ -472,40 +429,21 @@ def run(debug: "Use this flag to enable the debug/verbose mode."=False,
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
 
-    # The following code attempts to read the input file from
-    # the file system or fails with RuntimeError.
-    current_dir = os.path.dirname(__file__)
-    input_file = os.path.join(current_dir, input_file)
-    if not os.path.isfile(input_file):
-        raise RuntimeError("Mising input file:", input_file)
-    with open(input_file, "r") as f:
-        content = f.read().split("\n")
-
-    # Cases are read from the file in the next section.
-    # The expected format is a number followed by n text lines.
-    cases_positions = [
-        row_number
-        for row_number, row in enumerate(content)
-        if len(row) == 1
-    ]
-    cases_positions.append(len(content))
-    for case_number in range(len(cases_positions) - 1):
-
-        # The case is read by detecting the initial and final
-        # position of the case content in the file. If the first
-        # line says "5", then the case content is between the
-        # positions "1" and "6" (Direct Access).
-        case_position_start = cases_positions[case_number]
-        case_position_end = cases_positions[case_number + 1]
-        rows = content[case_position_start + 1:case_position_end]
+    # The following piece of code reads from stdin
+    # and truncates the input by case length..
+    for case_number, line in enumerate(sys.stdin):
+        case_length = int(line)  # WARNING: May raise ValueError.
+        case_data = "\n".join([
+            next(sys.stdin).replace("\n", "")
+            for _ in range(case_length)
+        ])
 
         # This is where the Genetic Algorithm is executed.
         # It will run once per case in the input file.
-        genes_data = "\n".join(rows)
-        g = Genes(genes_data)
+        g = Genes(case_data)
         s = Sequence(genes=g, ages=ages)
         s.run()
-        print("Case",
-              case_number + 1,
-              ":",  # Yes, I know there is a space here.
-              s.population.get_survivor(Sequence.IMPOSSIBLE))
+
+        # Printing sequence result to stdout.
+        title = "Case {}:".format(case_number + 1)
+        print(title, s.population.get_survivor(Sequence.IMPOSSIBLE))
