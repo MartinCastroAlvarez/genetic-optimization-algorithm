@@ -13,8 +13,8 @@ You can run unit tests by executing the following command:
 import unittest
 from parameterized import parameterized
 
-from edith2 import Genes, Sequence
 from edith import Genes, Sequence
+from edith2 import Genes, Sequence
 
 fixtures = [(
     Sequence.IMPOSSIBLE,
@@ -107,7 +107,7 @@ class FunctionalTests(unittest.TestCase):
         """
         input_ = "\n".join(input_)
         g = Genes(input_)
-        s = Sequence(genes=g)
+        s = Sequence(genes=g, ages=g.size)
         s.run()
         self.assertEquals(s.population.get_survivor(Sequence.IMPOSSIBLE),
                           output)

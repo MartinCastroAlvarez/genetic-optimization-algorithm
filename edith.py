@@ -219,6 +219,16 @@ class Population(object):
         self.__remove_fit()
         logger.debug(self.chromosomes)
 
+    @property
+    def shortest_survivor(self) -> int:
+        """ Property to access the length of the shortest survivor. """
+        return self.survivors[self.genes.A].str.len().min()
+
+    @property
+    def shortest_chromosome(self) -> int:
+        """ Property to access the length of the shortest chromosome. """
+        return self.chromosomes[self.genes.A].str.len().min()
+
     def __calculate_dominance(self):
         """
         This private method will calculate the dominance of
@@ -392,6 +402,10 @@ class Sequence(object):
                 if self.population.chromosomes.empty:
                     logger.debug("Breaking iteration.")
                     break
+                if self.population.shortest_survivor < self.population.shortest_chromosome:
+                    logger.debug("Solution found.")
+                    break
+
         logger.debug("Finished analyzing sequence.")
 
 
@@ -422,7 +436,7 @@ def run(debug: "Use this flag to enable the debug/verbose mode."=False,
         # This is where the Genetic Algorithm is executed.
         # It will run once per case in the input file.
         g = Genes(case_data)
-        s = Sequence(genes=g, ages=ages)
+        s = Sequence(genes=g, ages=g.size)
         s.run()
 
         # Printing results to STDOUT.

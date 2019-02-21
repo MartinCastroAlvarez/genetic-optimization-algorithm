@@ -1,6 +1,6 @@
 """
 This is modified version of edith.py which does not use any external library.
-The code wil look ugly and the script will not scale so easily.
+The code will look ugly and the script will not scale so easily.
 
 AUTHOR: Martin Alejandro Castro Alvarez
 EMAIL: martincastro.10.5@gmail.com
@@ -53,7 +53,7 @@ class Genes(object):
         """
         Genes getter.
 
-        This function returns the [dict instead of pd.DataFrame] 
+        This function returns the [dict instead of pd.DataFrame]
         containing the genetic pairs.
 
         The purpose of this method is to provide
@@ -178,6 +178,16 @@ class Population(object):
         self.__remove_unfit()
         self.__remove_fit()
         logger.debug(json.dumps(self.chromosomes, indent=4))
+
+    @property
+    def shortest_survivor(self) -> int:
+        """ Property to access the length of the shortest survivor. """
+        return min(len(x[0]) for x in self.survivors) if self.survivors else -1
+
+    @property
+    def shortest_chromosome(self) -> int:
+        """ Property to access the length of the shortest chromosome. """
+        return min(len(x[0]) for x in self.chromosomes) if self.chromosomes else -1
 
     def __calculate_dominance(self):
         """
@@ -327,13 +337,14 @@ class Sequence(object):
                 if not self.population.chromosomes:
                     logger.debug("Breaking iteration.")
                     break
+                if self.population.survivors and\
+                   self.population.shortest_survivor < self.population.shortest_chromosome:
+                    logger.debug("Solution found.")
+                    break
         logger.debug("Finished analyzing sequence.")
 
 
 if __name__ == "__main__":
-
-    logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.DEBUG)
 
     # The following piece of code reads from stdin
     # and truncates the input by case length..
@@ -347,7 +358,7 @@ if __name__ == "__main__":
         # This is where the Genetic Algorithm is executed.
         # It will run once per case in the input file.
         g = Genes(case_data)
-        s = Sequence(genes=g, ages=ages)
+        s = Sequence(genes=g, ages=g.size)
         s.run()
 
         # Printing results to STDOUT.
