@@ -1,60 +1,21 @@
 """
+This is modified version of edith.py which does not use any external library.
+The code wil look ugly and the script will not scale so easily.
+
 AUTHOR: Martin Alejandro Castro Alvarez
 EMAIL: martincastro.10.5@gmail.com
 HOME: https://www.martincastroalvarez.com
 DATE: 2019, Feb 21th.
 
-This is a Genetic Algorithm aimed at solving
-the problem described in the following link:
-https://cmind.kattis.com/test/programming/regsw7x4fvc39dhhhuxfd7chwvst9si2/problems/cd8c43d7b3d83c95
-
-WARNING: There is one condition that I haven't understood:
-The restriction for all i !~ j, Si !~ Sj. However, I hope I have
-built a small system that allows me easily add new features.
-
-You can run this script by executing the following instructions:
->>> virtualenv -p python3.4 env
->>> source env/bin/activate
->>> pip install -r requirements.txt
->>> cat sample-01.in | python3 edith.py
-
-The expected output is:
->>> (.env) [martin@M7 edith]$ python3 edith.py
-Case 1 dearalanhowareyou
-Case 2 ienjoycorresponding
-Case 3 abcd
-Case 4 IMPOSSIBLE
-
-You can also see all the flags looking at the script help:
->>> python3 edith.py -h
-usage: edith.py [-h] [--debug] [--no-debug]
-                [--ages AGES]
-optional arguments:
-  -h, --help            show this help message and exit
-  --debug               Use this flag to enable the debug/verbose mode.
-                        (default: False)
-  --no-debug
-  --ages AGES, -a AGES  Amount of iterations. (default: 10)
-
-You can run unit tests by executing the following command:
->>> python -m unittest test_edith.py
-
-This code is compliant with PEP-8 standards:
-https://www.python.org/dev/peps/pep-0008/
-You can check it by running the following instruction:
->>> flake8 edith.py
+You can execute this script by running this:
+>>> cat sample-01.in | python3 edith2.py
 """
 
 import os
 import sys
+import json
+
 import logging
-
-import numpy as np
-import pandas as pd
-
-import begin
-
-from io import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +28,6 @@ class Genes(object):
     @constant A: Represents the set of all 'a' elements in the genetic pairs.
     @constant B: Represents the set of all 'b' elements in the genetic pairs.
     """
-
-    A = "A"
-    B = "B"
 
     def __init__(self, genes: str=None):
         """
@@ -84,26 +42,26 @@ class Genes(object):
             raise ValueError("Genetic code must not be empty.")
         if not isinstance(genes, str):
             raise ValueError("Expecting a string, not:", type(genes))
-        self.genes = pd.read_csv(StringIO(genes),
-                                 header=None,
-                                 sep=" ",
-                                 names=[self.A, self.B])
-        self.genes = self.genes.reindex(columns=[self.A, self.B])
-        # self.genes = self.genes[self.genes[self.A] != self.genes[self.B]]
-        logger.debug(self.genes)
+        self.A = []
+        self.B = []
+        for gene in genes.split("\n"):
+            a, b = gene.split(" ")
+            self.A.append(a)
+            self.B.append(b)
 
-    def get_genes(self, **kwargs) -> pd.DataFrame:
+    def get_genes(self, **kwargs) -> list:
         """
         Genes getter.
 
-        This function returns the Pandas DataFrame
+        This function returns the [dict instead of pd.DataFrame] 
         containing the genetic pairs.
 
         The purpose of this method is to provide
         custom mutations in the future. For example,
         by getting only genes that start with "s".
         """
-        return self.genes
+        for i, _ in enumerate(self.A):
+            yield [self.A[i], self.B[i]]
 
     @property
     def size(self) -> int:
@@ -112,7 +70,7 @@ class Genes(object):
 
         This function returns the size of the genetic code.
         """
-        return len(self.genes)
+        return len(self.A)
 
     def __str__(self):
         """ To String method. """
@@ -166,10 +124,11 @@ class Population(object):
         if not genes.size:
             raise RuntimeError("Empty genetic code.")
         self.genes = genes
-        genes = self.genes.get_genes()
-        self.survivors = pd.DataFrame()
-        condition = genes[self.genes.A].str[0] == genes[self.genes.B].str[0]
-        self.chromosomes = genes[condition][[self.genes.A, self.genes.B]]
+        self.survivors = []
+        self.chromosomes = []
+        for gene in self.genes.get_genes():
+            if gene[0].startswith(gene[1]) or gene[1].startswith(gene[0]):
+                self.chromosomes.append(gene)
         self.fit()
 
     def __str__(self):
@@ -199,25 +158,26 @@ class Population(object):
         @param default: String value that will be
                         returned if there are no survivors.
         """
-        if self.survivors.empty:
+        if not self.survivors:
             return default
-        self.survivors[self.TMP_INDEX] = self.survivors[self.genes.A].str.len()
-        s = self.survivors.sort_values([self.TMP_INDEX, self.genes.A],
-                                       ascending=[True, True])
-        return s.iloc[0][self.genes.A]
+        survivors = [
+            survivor[0]
+            for survivor in self.survivors
+        ]
+        survivors = sorted(survivors, key=lambda s: (len(s), s))
+        return survivors[0]
 
     def fit(self):
         """
         This method is used to detect the fitness of the population.
 
         The dominance of genes 'A' and 'B' will be calculated.
-        After that, unfit chromosomes will be removed.
-        """
         logger.debug("Fitting population.")
+        """
         self.__calculate_dominance()
         self.__remove_unfit()
         self.__remove_fit()
-        logger.debug(self.chromosomes)
+        logger.debug(json.dumps(self.chromosomes, indent=4))
 
     def __calculate_dominance(self):
         """
@@ -229,17 +189,14 @@ class Population(object):
 
         This can be later used to remove unfit chromosomes.
         """
-        a_dominance = self.chromosomes[[self.genes.A,
-                                        self.genes.B]].apply(self.get_fitness,
-                                                             axis=1)
-        self.chromosomes[self.A_DOMINANCE] = a_dominance
-        b_dominance = self.chromosomes[[self.genes.B,
-                                        self.genes.A]].apply(self.get_fitness,
-                                                             axis=1)
-        self.chromosomes[self.B_DOMINANCE] = b_dominance
+        for i, chromosome in enumerate(self.chromosomes):
+            a_dominance = self.get_fitness(chromosome[0], chromosome[1])
+            b_dominance = self.get_fitness(chromosome[1], chromosome[0])
+            self.chromosomes[i].append(a_dominance)
+            self.chromosomes[i].append(b_dominance)
 
     @classmethod
-    def get_fitness(cls, row: list) -> str:
+    def get_fitness(cls, a: str=None, b: str=None):
         """
         This function must be used to calculate
         the string distance of 2 strings in a DataFrame.
@@ -257,8 +214,6 @@ class Population(object):
         >>> fitness("AA", "AA")
         '_fit'
         """
-        a = row.iloc[0]
-        b = row.iloc[1]
         if a == b:
             return cls.FIT
         if a.startswith(b):
@@ -274,13 +229,13 @@ class Population(object):
         If 'A' and 'B' are both dominant, it means the
         genes can not fuse and the chromosome will adapt.
         """
-        is_a_unfit = self.chromosomes[self.A_DOMINANCE] == self.UNFIT
-        is_b_unfit = self.chromosomes[self.B_DOMINANCE] == self.UNFIT
-        condition = is_a_unfit & is_b_unfit
-        if condition.any():
-            logger.debug("Removing %s unfit chromosome(s).",
-                         condition.value_counts()[True])
-        self.chromosomes = self.chromosomes[~condition]
+        self.chromosomes = [
+            chromosome
+            for chromosome in self.chromosomes
+            if (chromosome[2] == self.UNFIT and chromosome[3] != self.UNFIT)
+            or (chromosome[2] != self.UNFIT and chromosome[3] == self.UNFIT)
+            or (chromosome[2] != self.UNFIT and chromosome[3] != self.UNFIT)
+        ]
 
     def __remove_fit(self):
         """
@@ -294,13 +249,13 @@ class Population(object):
         because there is at least 1 survivor that has higher
         alphabetical priority in the final result.
         """
-        is_a_fit = self.chromosomes[self.A_DOMINANCE] == self.FIT
-        is_b_fit = self.chromosomes[self.B_DOMINANCE] == self.FIT
-        condition = is_a_fit | is_b_fit
-        local_survivors = self.chromosomes[condition]
-        local_survivors = local_survivors.reset_index()
-        self.survivors = pd.concat([self.survivors, local_survivors])
-        self.chromosomes = self.chromosomes[~condition]
+        new_generation = []
+        for chromosome in self.chromosomes:
+            if chromosome[2] == self.FIT:
+                self.survivors.append(chromosome)
+            else:
+                new_generation.append(chromosome)
+        self.chromosomes = new_generation
 
     def mutate(self):
         """
@@ -312,35 +267,15 @@ class Population(object):
         in order to create more chromosomes from both.
         """
         logger.debug("Mutating population.")
-
-        # The following code is requied to merge 2 DataFrames.
-        query = {
-            self.TMP_INDEX: np.nan,
-        }
-        previous_genes = self.chromosomes.assign(**query)
-        new_genes = self.genes.get_genes()
-        new_genes = new_genes.assign(**query)
-        new_generation = pd.merge(previous_genes,
-                                  new_genes,
-                                  suffixes=("", self.TMP_SUFFIX),
-                                  on=self.TMP_INDEX,
-                                  how='outer')
-
-        # Genes 'A' and 'B' from both genetic codes
-        # will be concatenated in the following section.
-        logger.debug(new_genes)
-        logger.debug(previous_genes)
-        previous_a = new_generation[self.genes.A]
-        previous_b = new_generation[self.genes.B]
-        new_a = new_generation[self.genes.A + self.TMP_SUFFIX]
-        new_b = new_generation[self.genes.B + self.TMP_SUFFIX]
-        new_generation[self.genes.A] = previous_a + new_a
-        new_generation[self.genes.B] = previous_b + new_b
-
-        # Chromosomes in this population will be replaced
-        # with the new generation of chromosomes.
-        self.chromosomes = new_generation[[self.genes.A, self.genes.B]]
-        logger.debug(self.chromosomes)
+        new_generation = []
+        for gene in self.genes.get_genes():
+            for chromosome in self.chromosomes:
+                new_generation.append([
+                    chromosome[0] + gene[0],
+                    chromosome[1] + gene[1],
+                ])
+        self.chromosomes = new_generation
+        logger.debug(json.dumps(self.chromosomes, indent=4))
 
 
 class Sequence(object):
@@ -384,31 +319,21 @@ class Sequence(object):
         retrieved by executing: self.population.get_survivor().
         """
         logger.debug("Analyzing sequence.")
-        if not self.population.chromosomes.empty:
+        if self.population.chromosomes:
             for age in range(self.ages):
                 logger.debug("Running on age: %s/%s.", age + 1, self.ages)
                 self.population.mutate()
                 self.population.fit()
-                if self.population.chromosomes.empty:
+                if not self.population.chromosomes:
                     logger.debug("Breaking iteration.")
                     break
         logger.debug("Finished analyzing sequence.")
 
 
-@begin.start
-def run(debug: "Use this flag to enable the debug/verbose mode."=False,
-        ages: "Amount of iterations."=10):
-    """
-    This function is required by "begin" to provide shell script access.
+if __name__ == "__main__":
 
-    @param debug: Use this flag to enable the debug/verbose mode.
-    @param ages: Amount of iterations.
-    """
-
-    # If debug mode is enabled, it will log messages to stdout.
-    if debug:
-        logger.addHandler(logging.StreamHandler())
-        logger.setLevel(logging.DEBUG)
+    logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.DEBUG)
 
     # The following piece of code reads from stdin
     # and truncates the input by case length..

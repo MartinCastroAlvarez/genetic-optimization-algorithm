@@ -13,6 +13,7 @@ You can run unit tests by executing the following command:
 import unittest
 from parameterized import parameterized
 
+from edith2 import Genes, Sequence
 from edith import Genes, Sequence
 
 fixtures = [(
