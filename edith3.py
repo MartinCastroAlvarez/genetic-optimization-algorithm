@@ -12,97 +12,111 @@ You can execute this script by running this:
 """
 
 import sys
+import timeit
 
 import itertools
 import logging
 
-UNFIT = "_unfit"
+FIT = 1
+UNFIT = 0
+
+start = timeit.timeit()
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.DEBUG)
 
 
-def get_fitness(sequence: str, dominance: list, new_genes: list) -> list:
-    a = dominance[0] + new_genes[0]
-    b = dominance[1] + new_genes[1]
-    if sequence and len(a) > 5 * len(sequence):  # Probably diverging.
-        return UNFIT, ['', '']
-    if a.startswith(b):
-        return sequence + b, [a[len(b):], '']
-    if b.startswith(a):
-        return sequence + a, ['', b[len(a):]]
-    return UNFIT, ['', '']
+def fit(sequence: list, a: list, b: list, new_genes: list) -> list:
+    a.extend(new_genes[0])
+    b.extend(new_genes[1])
+    if len(a) == len(b) and a == b:
+        return FIT, [], []
+    if len(a) > len(b) and a[:len(b)] == b:
+        sequence.extend(b)
+        return sequence, a[len(b):], []
+    if len(b) > len(a) and b[:len(a)] == a:
+        sequence.extend(a)
+        return sequence, [], b[len(a):]
+    return UNFIT, [], []
 
+# Amount of runs.
+ages = 20
 
-if __name__ == "__main__":
+# The following piece of code reads from stdin
+# and truncates the input by case length..
+for case_number, line in enumerate(sys.stdin):
 
-    # Amount of runs.
-    ages = 8
+    # Reading block of characters from stdin.
+    case_length = int(line)  # WARNING: May raise ValueError.
+    genes = (
+        next(sys.stdin).replace("\n", "").split()
+        for _ in range(case_length)
+    )
+    genes = [
+        (
+            list(gene[0]),
+            list(gene[1]),
+        )
+        for gene in genes
+    ]
 
-    # The following piece of code reads from stdin
-    # and truncates the input by case length..
-    for case_number, line in enumerate(sys.stdin):
-        case_length = int(line)  # WARNING: May raise ValueError.
-        case_data = "\n".join([
-            next(sys.stdin).replace("\n", "")
-            for _ in range(case_length)
-        ])
+    # Generating initial population.
+    chromosomes = (
+        fit([], [], [], gene)
+        for gene in genes
+    )
+    chromosomes = [
+        chromosome
+        for chromosome in chromosomes
+        if chromosome[0] != UNFIT
+    ]
 
-        # This is where the Genetic Algorithm is executed.
-        # It will run once per case in the input file.
-        genes = [
-            line.split()
-            for line in case_data.split("\n")
-        ]
+    # Catching survivors in the origins.
+    survivors = [
+        chromosome[0]
+        for chromosome in chromosomes
+        if chromosome[0] == FIT
+    ]
+    min_survivor = min(len(s) for s in survivors) if survivors else 10000
+
+    # For each age, mutations will be performed
+    # on the chromosomes and only the survivors will be kept.
+    for age in range(ages):
+        logger.debug("Age=%s | Chromosomes=%s | Survivors=%s", age, len(chromosomes), len(survivors))
+        mutations = (
+            (c, g)
+            for c in chromosomes
+            for g in genes
+            if len(c[0]) < min_survivor
+            and c[0] != FIT
+        )
+        raise Exception(list(mutations))
+        chromosomes = (
+            fit(mutation[0][0], mutation[0][1], mutation[0][2], mutation[1])
+            for mutation in mutations
+        )
         chromosomes = [
-            get_fitness('', ['', ''], gene)
-            for gene in genes
-        ]
-
-        # Catching survivors in the origins.
-        survivors = [
-            chromosome[0]
+            chromosome
             for chromosome in chromosomes
             if chromosome[0] != UNFIT
-            and not chromosome[1][0]
-            and not chromosome[1][1]
         ]
+        if not chromosomes:
+            break
+        survivors.extend([
+            chromosome[0]
+            for chromosome in chromosomes
+            if chromosome[0] == FIT
+        ])
         min_survivor = min(len(s) for s in survivors) if survivors else 10000
+    raise Exception(survivors)
 
-        # For each age, mutations will be performed
-        # on the chromosomes and only the survivors will be kept.
-        for age in range(ages):
-            logger.debug("Age=%s | Chromosomes=%s | Survivors=%s", age, len(chromosomes), len(survivors))
-            chromosomes = (
-                get_fitness(mutation[0][0], mutation[0][1], mutation[1])
-                for mutation in (
-                    (c, g)
-                    for c in chromosomes
-                    for g in genes
-                    if len(c[0]) < min_survivor
-                )
-            )
-            chromosomes = [
-                chromosome
-                for chromosome in chromosomes
-                if chromosome[0] != UNFIT
-            ]
-            if not chromosomes:
-                break
-            survivors.extend([
-                chromosome[0]
-                for chromosome in chromosomes
-                if chromosome[0] != UNFIT
-                and not chromosome[1][0]
-                and not chromosome[1][1]
-            ])
-            min_survivor = min(len(s) for s in survivors) if survivors else 10000
+    # Detecting the final survivor.
+    survivors = sorted(survivors, key=lambda s: (len(s), s))
+    survivor = survivors[0] if survivors else "IMPOSSIBLE"
 
-        # Detecting the final survivor.
-        survivors = sorted(survivors, key=lambda s: (len(s), s))
-        survivor = survivors[0] if survivors else "IMPOSSIBLE"
+    # Printing results to STDOUT.
+    title = "Case {}:".format(case_number + 1)
+    print(title, survivor)
 
-        # Printing results to STDOUT.
-        title = "Case {}:".format(case_number + 1)
-        print(title, survivor)
+logger.debug("Took: %s", timeit.timeit() - start)
