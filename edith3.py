@@ -17,8 +17,9 @@ import timeit
 import itertools
 import logging
 
-FIT = 1
 UNFIT = 0
+FIT = 1
+PARTIAL = 2
 
 start = timeit.timeit()
 
@@ -28,20 +29,21 @@ logger.setLevel(logging.DEBUG)
 
 
 def fit(sequence: list, a: list, b: list, new_genes: list) -> list:
-    a.extend(new_genes[0])
-    b.extend(new_genes[1])
+    a = a + new_genes[0]
+    b = b + new_genes[1]
+    # logger.debug(a)
+    if len(sequence) > 50:
+        return UNFIT, [], [], []
     if len(a) == len(b) and a == b:
-        return FIT, [], []
+        return FIT, sequence + a, [], []
     if len(a) > len(b) and a[:len(b)] == b:
-        sequence.extend(b)
-        return sequence, a[len(b):], []
+        return PARTIAL, sequence + b, a[len(b):], []
     if len(b) > len(a) and b[:len(a)] == a:
-        sequence.extend(a)
-        return sequence, [], b[len(a):]
-    return UNFIT, [], []
+        return PARTIAL, sequence + a, [], b[len(a):]
+    return UNFIT, [], [], []
 
 # Amount of runs.
-ages = 20
+ages = 12
 
 # The following piece of code reads from stdin
 # and truncates the input by case length..
@@ -74,7 +76,7 @@ for case_number, line in enumerate(sys.stdin):
 
     # Catching survivors in the origins.
     survivors = [
-        chromosome[0]
+        chromosome[1]
         for chromosome in chromosomes
         if chromosome[0] == FIT
     ]
@@ -83,37 +85,46 @@ for case_number, line in enumerate(sys.stdin):
     # For each age, mutations will be performed
     # on the chromosomes and only the survivors will be kept.
     for age in range(ages):
-        logger.debug("Age=%s | Chromosomes=%s | Survivors=%s", age, len(chromosomes), len(survivors))
+
+        # Generating mutations.
         mutations = (
             (c, g)
             for c in chromosomes
             for g in genes
-            if len(c[0]) < min_survivor
+            if c[0] != UNFIT
             and c[0] != FIT
+            and len(c[1]) < min_survivor
+            and c[2] == g[1][:len(c[2])]
+            and c[3] == g[0][:len(c[3])]
         )
-        raise Exception(list(mutations))
-        chromosomes = (
-            fit(mutation[0][0], mutation[0][1], mutation[0][2], mutation[1])
-            for mutation in mutations
-        )
+
+        # Evaluting mutation fitness.
         chromosomes = [
-            chromosome
-            for chromosome in chromosomes
-            if chromosome[0] != UNFIT
+            fit(mutation[0][1],
+                mutation[0][2],
+                mutation[0][3],
+                mutation[1])
+            for mutation in mutations
         ]
+
+        # Detecting when to stop.
         if not chromosomes:
             break
-        survivors.extend([
-            chromosome[0]
+
+        # Detecting fittest chrosomes.
+        survivors.extend(
+            chromosome[1]
             for chromosome in chromosomes
             if chromosome[0] == FIT
-        ])
-        min_survivor = min(len(s) for s in survivors) if survivors else 10000
-    raise Exception(survivors)
+        )
+        min_survivor = min(
+            len(s)
+            for s in survivors
+        ) if survivors else 10000
 
     # Detecting the final survivor.
     survivors = sorted(survivors, key=lambda s: (len(s), s))
-    survivor = survivors[0] if survivors else "IMPOSSIBLE"
+    survivor = "".join(survivors[0]) if survivors else "IMPOSSIBLE"
 
     # Printing results to STDOUT.
     title = "Case {}:".format(case_number + 1)
