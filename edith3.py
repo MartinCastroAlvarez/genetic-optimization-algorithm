@@ -14,98 +14,131 @@ You can execute this script by running this:
 import sys
 import timeit
 
-import itertools
 import logging
 
 UNFIT = 0
 FIT = 1
-PARTIAL = 2
+ONGOING = 2
+
+MAX_AGES = 12
+DEFAULT_SHORTEST_SURVIVOR = 100000
+IMPOSSIBLE = "IMPOSSIBLE"
 
 start = timeit.timeit()
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
-def fit(sequence: list, a: list, b: list, new_genes: list) -> list:
-    a = a + new_genes[0]
-    b = b + new_genes[1]
-    # logger.debug(a)
-    if len(sequence) > 50:
-        return UNFIT, [], [], []
-    if len(a) == len(b) and a == b:
+def mutate(sequence: list, a: list, b:list, gene: list) -> list:
+
+    logger.debug("------------------------------------------------")
+    logger.debug("%s | %s %s | %s", sequence, a, b, gene)
+    a = a + gene[1]
+    b = b + gene[2]
+
+    if a == b:
+        logger.debug("FIT")
         return FIT, sequence + a, [], []
-    if len(a) > len(b) and a[:len(b)] == b:
-        return PARTIAL, sequence + b, a[len(b):], []
-    if len(b) > len(a) and b[:len(a)] == a:
-        return PARTIAL, sequence + a, [], b[len(a):]
+
+    if a[:len(b)] == b[:len(a)]:
+        logger.debug("ONGOING")
+        return ONGOING, sequence + a[:len(b)], a[len(b):], b[len(a):]
+
+    logger.debug("UNFIT")
     return UNFIT, [], [], []
 
-# Amount of runs.
-ages = 12
 
 # The following piece of code reads from stdin
 # and truncates the input by case length..
-for case_number, line in enumerate(sys.stdin):
+output = []
+for line in sys.stdin:
 
     # Reading block of characters from stdin.
-    case_length = int(line)  # WARNING: May raise ValueError.
     genes = (
         next(sys.stdin).replace("\n", "").split()
-        for _ in range(case_length)
+        for _ in range(int(line))  # WARNING: May raise ValueError.
     )
     genes = [
         (
+            i,
             list(gene[0]),
             list(gene[1]),
         )
-        for gene in genes
+        for i, gene in enumerate(genes)
     ]
+
+    # Detecting systems that might diverge.
+    # If all elements on the left or the right
+    # are longer than the other gene, it means
+    # the system will inevitable diverge.
+    a_diverges = all(
+        len(gene[1]) > len(gene[2])
+        for gene in genes
+    )
+    b_diverges = all(
+        len(gene[2]) > len(gene[1])
+        for gene in genes
+    )
+    if a_diverges or b_diverges:
+        output.append(IMPOSSIBLE)
+        continue
 
     # Generating initial population.
     chromosomes = (
-        fit([], [], [], gene)
+        mutate(sequence=[], a=[], b=[], gene=gene)
         for gene in genes
+        if gene[1][:len(gene[2])] == gene[2][:len(gene[1])]
+        and gene[2][:len(gene[1])] == gene[1][:len(gene[2])]
     )
-    chromosomes = [
-        chromosome
+    chromosomes = {
+        hash(str(chromosome)): chromosome
         for chromosome in chromosomes
         if chromosome[0] != UNFIT
-    ]
+    }
 
     # Catching survivors in the origins.
     survivors = [
         chromosome[1]
-        for chromosome in chromosomes
+        for chromosome in chromosomes.values()
         if chromosome[0] == FIT
     ]
-    min_survivor = min(len(s) for s in survivors) if survivors else 10000
+    shortest_survivor = min(
+        len(survivor)
+        for survivor in survivors
+    ) if survivors else DEFAULT_SHORTEST_SURVIVOR
 
     # For each age, mutations will be performed
     # on the chromosomes and only the survivors will be kept.
-    for age in range(ages):
+    age = 1
+    while True:
+
+        logger.debug("====================================")
+        logger.debug("Age:%s", age)
+        logger.debug("Chromosomes=%s", chromosomes)
+        logger.debug("====================================")
 
         # Generating mutations.
-        mutations = (
-            (c, g)
-            for c in chromosomes
-            for g in genes
-            if c[0] != UNFIT
-            and c[0] != FIT
-            and len(c[1]) < min_survivor
-            and c[2] == g[1][:len(c[2])]
-            and c[3] == g[0][:len(c[3])]
+        chromosomes = (
+            mutate(sequence=chromosome[1],
+                   a=chromosome[2],
+                   b=chromosome[3],
+                   gene=gene)
+            for chromosome in chromosomes.values()
+            for gene in genes
+            if chromosome[0] == ONGOING
+            and len(chromosome[1]) < shortest_survivor
+            and (
+                gene[1][:len(chromosome[3])] == chromosome[3][:len(gene[1])]
+                or gene[2][:len(chromosome[2])] == chromosome[2][:len(gene[2])]
+            )
         )
-
-        # Evaluting mutation fitness.
-        chromosomes = [
-            fit(mutation[0][1],
-                mutation[0][2],
-                mutation[0][3],
-                mutation[1])
-            for mutation in mutations
-        ]
+        chromosomes = {
+            hash(str(chromosome)): chromosome
+            for chromosome in chromosomes
+            if chromosome[0] != UNFIT
+        }
 
         # Detecting when to stop.
         if not chromosomes:
@@ -114,20 +147,26 @@ for case_number, line in enumerate(sys.stdin):
         # Detecting fittest chrosomes.
         survivors.extend(
             chromosome[1]
-            for chromosome in chromosomes
+            for chromosome in chromosomes.values()
             if chromosome[0] == FIT
         )
-        min_survivor = min(
-            len(s)
-            for s in survivors
-        ) if survivors else 10000
+        shortest_survivor = min(
+            len(survivor)
+            for survivor in survivors
+        ) if survivors else DEFAULT_SHORTEST_SURVIVOR
 
     # Detecting the final survivor.
     survivors = sorted(survivors, key=lambda s: (len(s), s))
-    survivor = "".join(survivors[0]) if survivors else "IMPOSSIBLE"
+    output.append("".join(survivors[0]) if survivors else IMPOSSIBLE)
 
-    # Printing results to STDOUT.
-    title = "Case {}:".format(case_number + 1)
-    print(title, survivor)
-
+# Printing results to STDOUT.
+print("\n".join(
+    "".join([
+        "Case ",
+        str(case_number + 1),
+        ": ",
+        survivor,
+    ])
+    for case_number, survivor in enumerate(output)
+))
 logger.debug("Took: %s", timeit.timeit() - start)
