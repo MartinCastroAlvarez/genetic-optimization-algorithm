@@ -29,9 +29,6 @@ MAX_GENERATIONS = 12  # NOTE: 1 <= k <= 11
 DEFAULT_SHORTEST_SURVIVOR = 100000
 IMPOSSIBLE = "IMPOSSIBLE"
 
-MAX_STRING_SIZE = 100
-MAX_GENOTYPES = 11
-
 
 def get_fitness(a: str, b: str) -> str:
     """
@@ -46,7 +43,7 @@ def get_fitness(a: str, b: str) -> str:
     return FIT
 
 
-def mutate(phenotype: tuple, genotype: tuple) -> tuple:
+def mutate(phenotype: tuple, genotype: tuple, shortest_survivor: int) -> tuple:
     """
     This function will combine a phenotype and a genotype
     into a new phenotype, as if the phenotype mutated
@@ -54,11 +51,17 @@ def mutate(phenotype: tuple, genotype: tuple) -> tuple:
     """
     a = phenotype[2] + genotype[0]
     b = phenotype[3] + genotype[1]
+    path = phenotype[4][:]  # The fastest way to clone is slicing.
+    path[genotype[4]] = False
+    f = get_fitness(a, b)
+    if f == FITTEST:
+        shortest_survivor = min(shortest_survivor, len(phenotype[1] + a[:len(b)]))
     return (
-        get_fitness(a, b),
+        f,
         phenotype[1] + a[:len(b)],
         a[len(b):],
         b[len(a):],
+        path,
     )
 
 # The following piece of code reads from stdin
@@ -71,27 +74,36 @@ for line in sys.stdin:
         next(sys.stdin).rstrip().split()
         for _ in range(int(line))  # WARNING: May raise ValueError.
     )
-
-    # Generating unique genotypes.
     genotypes = {
-        i: (
-            tuple(ord(g) for g in genotype[0][:MAX_STRING_SIZE].lower()),
-            tuple(ord(g) for g in genotype[1][:MAX_STRING_SIZE].lower()),
+        (
+            tuple(ord(g) for g in genotype[0]),
+            tuple(ord(g) for g in genotype[1]),
             len(genotype[0]),
             len(genotype[1]),
+            genotype_id,
         )
-        for i, genotype in enumerate(genotypes)
+        for genotype_id, genotype in enumerate(genotypes)
     }
-    genotypes = [
-        (
-            genotype[0],
-            genotype[1],
-            genotype[2],
-            genotype[3],
-            {i, },
-        )
-        for i, genotype in genotypes.items()
-    ]
+
+    # Cleaning genes by removing the
+    # ones with wierd characters not
+    # in the other pair.
+    a_all = {
+        char
+        for genotype in genotypes
+        for char in genotype[0]
+    }
+    b_all = {
+        char
+        for genotype in genotypes
+        for char in genotype[0]
+    }
+    genotypes = {
+        genotype
+        for genotype in genotypes
+        if not set(genotype[0]) - b_all
+        and not set(genotype[1]) - a_all
+    }
 
     # Detecting systems that might diverge.
     # If all elements on the left or the right
@@ -109,17 +121,17 @@ for line in sys.stdin:
         output.append(IMPOSSIBLE)
         continue
 
+    # Detecting the amount of generations.
+    generations = max(len(genotypes), MAX_GENERATIONS)
+
     # Generating initial population.
     phenotypes = (
-        (FIT, (), (), ()),
+        (FIT, (), (), (), [True] * generations),
     )
 
     # Initializing survivors.
     survivors = []
     shortest_survivor = DEFAULT_SHORTEST_SURVIVOR
-
-    # Detecting the amount of generations.
-    generations = min(len(genotypes), MAX_GENERATIONS)  # NOTE: Possible error.
 
     # For each generation, mutations will be performed
     # on the phenotypes and only the survivors will be kept.
@@ -127,24 +139,24 @@ for line in sys.stdin:
 
         # Generating mutations.
         phenotypes = (
-            mutate(phenotype=phenotype, genotype=genotype)
+            mutate(phenotype=phenotype, genotype=genotype, shortest_survivor=shortest_survivor)
             for phenotype in phenotypes
             for genotype in genotypes
-            if phenotype[0] == FIT
-            # and not genotype[4] & phenotype[4]
-            and len(phenotype[1]) < shortest_survivor
-            and (
+            if phenotype[0] == FIT  # Discard unfit phenotypes.
+            and phenotype[4][genotype[4]]  # Avoid repeating an element.
+            and len(phenotype[1]) < shortest_survivor  # Discarding long solutions.
+            and (  # Only retrieve potentially useful genotypes.
                 genotype[0][:len(phenotype[3])] == phenotype[3][:genotype[2]]
                 or genotype[1][:len(phenotype[2])] == phenotype[2][:genotype[3]]
             )
         )
 
-        # Removing unfit and duplicated phenotypes.
-        phenotypes = [
-            phenotype
+        # Removing unfit and duplicate phenotypes.
+        phenotypes = {
+            phenotype[:3]: phenotype
             for phenotype in phenotypes 
             if phenotype[0] != UNFIT
-        ]
+        }.values()
 
         # Stopping if there are no more mutations.
         if not phenotypes:
@@ -153,17 +165,19 @@ for line in sys.stdin:
         # Detecting fittest chrosomes.
         survivors.extend(list(filter(lambda phenotype: phenotype[0] == FITTEST,
                          phenotypes)))
+        """
         shortest_survivor = min(map(lambda survivor: len(survivor),
                                 survivors)) if survivors\
                                             else DEFAULT_SHORTEST_SURVIVOR
+        """
 
     # Detecting the final survivor.
     survivors = sorted(survivors, key=lambda s: (len(s[1]), s[1]))
-    survivor = (
+    survivor = "".join(
         chr(s)
         for s in survivors[0][1]
-    ) if survivors else None
-    output.append("".join(survivor) if survivors else IMPOSSIBLE)
+    ) if survivors else IMPOSSIBLE
+    output.append(survivor)
 
 # Printing results to STDOUT.
 sys.stdout.write("\n".join(
