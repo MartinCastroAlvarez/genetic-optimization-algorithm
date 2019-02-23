@@ -66,7 +66,7 @@ def mutate(phenotype: tuple, genotype: tuple, shortest_survivor: int) -> tuple:
 
 # The following piece of code reads from stdin
 # and truncates the input by case length..
-output = []
+winners = []
 for line in sys.stdin:
 
     # Reading block of characters from stdin.
@@ -118,7 +118,7 @@ for line in sys.stdin:
         for genotype in genotypes
     )
     if a_diverges or b_diverges:
-        output.append(IMPOSSIBLE)
+        winners.append(IMPOSSIBLE)
         continue
 
     # Detecting the amount of generations.
@@ -139,7 +139,9 @@ for line in sys.stdin:
 
         # Generating mutations.
         phenotypes = (
-            mutate(phenotype=phenotype, genotype=genotype, shortest_survivor=shortest_survivor)
+            mutate(phenotype=phenotype,
+                   genotype=genotype,
+                   shortest_survivor=shortest_survivor)
             for phenotype in phenotypes
             for genotype in genotypes
             if phenotype[0] == FIT  # Discard unfit phenotypes.
@@ -151,7 +153,7 @@ for line in sys.stdin:
             )
         )
 
-        # Removing unfit and duplicate phenotypes.
+        # Removing unfit and duplicated phenotypes.
         phenotypes = {
             phenotype[:3]: phenotype
             for phenotype in phenotypes 
@@ -165,19 +167,14 @@ for line in sys.stdin:
         # Detecting fittest chrosomes.
         survivors.extend(list(filter(lambda phenotype: phenotype[0] == FITTEST,
                          phenotypes)))
-        """
-        shortest_survivor = min(map(lambda survivor: len(survivor),
-                                survivors)) if survivors\
-                                            else DEFAULT_SHORTEST_SURVIVOR
-        """
 
     # Detecting the final survivor.
     survivors = sorted(survivors, key=lambda s: (len(s[1]), s[1]))
-    survivor = "".join(
+    winner = "".join(
         chr(s)
         for s in survivors[0][1]
     ) if survivors else IMPOSSIBLE
-    output.append(survivor)
+    winners.append(winner)
 
 # Printing results to STDOUT.
 sys.stdout.write("\n".join(
@@ -185,9 +182,9 @@ sys.stdout.write("\n".join(
         "Case ",
         str(case_number + 1),
         ": ",
-        survivor,
+        winner,
     ])
-    for case_number, survivor in enumerate(output)
+    for case_number, winner in enumerate(winners)
 ))
 sys.stdout.write("\n")
 
