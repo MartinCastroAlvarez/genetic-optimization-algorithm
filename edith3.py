@@ -107,7 +107,7 @@ for line in sys.stdin:
 
     # For each generation, mutations will be performed
     # on the phenotypes and only the survivors will be kept.
-    for generation in range(MAX_GENERATIONS):
+    for generation in range(MAX_GENERATIONS):  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
         # Generating mutations.
         phenotypes = (
