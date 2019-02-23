@@ -8,7 +8,7 @@ HOME: https://www.martincastroalvarez.com
 DATE: 2019, Feb 21th.
 
 You can execute this script by running this:
->>> cat sample-01.in | python3 -m cProfile edith3.py
+>>> cat sample-01.in | python3 -m cProfile -s cumtime edith3.py
 """
 
 import sys
@@ -39,11 +39,11 @@ def get_fitness(a: str, b: str) -> str:
     in this genetic algorithm.
     Fitness will increase as 'a' and 'b' are more similar.
     """
+    if a[:len(b)] != b[:len(a)]:
+        return UNFIT
     if a == b:
         return FITTEST
-    if a[:len(b)] == b[:len(a)]:
-        return FIT
-    return UNFIT
+    return FIT
 
 
 def mutate(phenotype: tuple, genotype: tuple) -> tuple:
@@ -54,7 +54,12 @@ def mutate(phenotype: tuple, genotype: tuple) -> tuple:
     """
     a = phenotype[2] + genotype[0]
     b = phenotype[3] + genotype[1]
-    return get_fitness(a, b), phenotype[1] + a[:len(b)], a[len(b):], b[len(a):]
+    return (
+        get_fitness(a, b),
+        phenotype[1] + a[:len(b)],
+        a[len(b):],
+        b[len(a):],
+    )
 
 # The following piece of code reads from stdin
 # and truncates the input by case length..
@@ -67,18 +72,26 @@ for line in sys.stdin:
         for _ in range(int(line))  # WARNING: May raise ValueError.
     )
 
-    # By creating a set from the genotypes,
-    # uniqueness is assured.
+    # Generating unique genotypes.
     genotypes = {
-        (
+        i: (
             tuple(ord(g) for g in genotype[0][:MAX_STRING_SIZE].lower()),
             tuple(ord(g) for g in genotype[1][:MAX_STRING_SIZE].lower()),
             len(genotype[0]),
             len(genotype[1]),
         )
-        for genotype in genotypes
+        for i, genotype in enumerate(genotypes)
     }
-    # raise Exception(genotypes)
+    genotypes = [
+        (
+            genotype[0],
+            genotype[1],
+            genotype[2],
+            genotype[3],
+            {i, },
+        )
+        for i, genotype in genotypes.items()
+    ]
 
     # Detecting systems that might diverge.
     # If all elements on the left or the right
@@ -105,9 +118,12 @@ for line in sys.stdin:
     survivors = []
     shortest_survivor = DEFAULT_SHORTEST_SURVIVOR
 
+    # Detecting the amount of generations.
+    generations = min(len(genotypes), MAX_GENERATIONS)  # NOTE: Possible error.
+
     # For each generation, mutations will be performed
     # on the phenotypes and only the survivors will be kept.
-    for generation in range(MAX_GENERATIONS):  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    for generation in range(generations):  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
         # Generating mutations.
         phenotypes = (
@@ -115,6 +131,7 @@ for line in sys.stdin:
             for phenotype in phenotypes
             for genotype in genotypes
             if phenotype[0] == FIT
+            # and not genotype[4] & phenotype[4]
             and len(phenotype[1]) < shortest_survivor
             and (
                 genotype[0][:len(phenotype[3])] == phenotype[3][:genotype[2]]
@@ -123,11 +140,11 @@ for line in sys.stdin:
         )
 
         # Removing unfit and duplicated phenotypes.
-        phenotypes = {
+        phenotypes = [
             phenotype
             for phenotype in phenotypes 
             if phenotype[0] != UNFIT
-        }
+        ]
 
         # Stopping if there are no more mutations.
         if not phenotypes:
