@@ -1,5 +1,5 @@
 begins==0.9
-numpy==1.16.1
+numpy==1.22.0
 pandas==0.22.0
 parameterized==0.7.0
 python-dateutil==2.8.0
